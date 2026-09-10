@@ -1,28 +1,34 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { EnrollmentStatus } from '@prisma/client';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+// src/modules/teacher/dto/create-teacher.dto.ts
 
-export class CreateTeacherAdminDto {
-  @ApiPropertyOptional()
+import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsOptional, IsDateString, IsObject } from 'class-validator';
+import { EmploymentStatus } from '@prisma/client';
+
+export class CreateTeacherDto {
+  @ApiProperty({
+    description: 'Teacher qualifications (JSON)',
+    required: false,
+  })
+  @IsObject()
   @IsOptional()
-  @IsString()
-  currentClassId?: string;
+  qualifications?: Record<string, any>;
 
-  @ApiPropertyOptional()
+  @ApiProperty({ description: 'Teacher bio', required: false })
+  @IsString()
   @IsOptional()
-  @IsString()
-  academicYearId?: string;
+  bio?: string;
 
-  @ApiPropertyOptional({
-    enum: EnrollmentStatus,
+  @ApiProperty({ description: 'Hire date', required: false })
+  @IsDateString()
+  @IsOptional()
+  hireDate?: string;
+
+  @ApiProperty({
+    description: 'Employment status',
+    enum: EmploymentStatus,
+    default: EmploymentStatus.ACTIVE,
+    required: false,
   })
   @IsOptional()
-  @IsEnum(EnrollmentStatus)
-  enrollmentStatus?: EnrollmentStatus;
-
-  // TODO:
-  // Add currentClassId when SchoolClass module is implemented
-
-  // TODO:
-  // Add academicYearId when AcademicYear module is implemented
+  employmentStatus?: EmploymentStatus;
 }

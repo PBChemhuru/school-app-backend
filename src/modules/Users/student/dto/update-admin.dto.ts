@@ -3,12 +3,6 @@ import { EnrollmentStatus } from '@prisma/client';
 import { IsOptional, IsString } from 'class-validator';
 
 export class UpdateStudentAdminDto {
-  @ApiProperty()
-  @ApiPropertyOptional()
-  @IsString()
-  @IsOptional()
-  admissionNumber?: string;
-
   @ApiProperty({
     enum: EnrollmentStatus,
   })

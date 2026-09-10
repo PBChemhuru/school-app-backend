@@ -188,8 +188,8 @@ model ParentStudent {
   relationship ParentRelationship?
   approved     Boolean @default(false)
 
-  parent  Parent  @relation(fields: [parentId], references: [id])
-  student Student @relation(fields: [studentId], references: [id])
+  parent  Parent  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([parentId, studentId])
 }
@@ -244,28 +244,28 @@ model Term {
   results   Result[]
 }
 
-model SchoolClass {
-  id             String   @id @default(cuid())
-  name           String
-  gradeLevel     String
-  section        String?
-  room           String?
-  maxCapacity    Int?
-  academicYearId String
-  classTeacherId String?
-  archived       Boolean  @default(false)
-  createdAt      DateTime @default(now())
+  model SchoolClass {
+    id             String   @id @default(cuid())
+    name           String
+    gradeLevel     String
+    section        String?
+    room           String?
+    maxCapacity    Int?
+    academicYearId String
+    classTeacherId String?
+    archived       Boolean  @default(false)
+    createdAt      DateTime @default(now())
 
-  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
-  classTeacher Teacher?     @relation(fields: [classTeacherId], references: [id])
+    academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+    classTeacher Teacher?     @relation(fields: [classTeacherId], references: [id])
 
-  students         Student[]
-  curricula        Curriculum[]
-  timetableEntries Timetable[]
-  announcements    Announcement[]
+    students         Student[]
+    curricula        Curriculum[]
+    timetableEntries Timetable[]
+    announcements    Announcement[]
 
-  @@unique([name, academicYearId])
-}
+    @@unique([name, academicYearId])
+  }
 
 model Subject {
   id          String   @id @default(cuid())

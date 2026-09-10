@@ -1,18 +1,29 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Prisma } from '@prisma/client';
-import { IsOptional, IsString } from 'class-validator';
-import { QualificationDto } from './qualification.dto ';
+// src/modules/teacher/dto/update-teacher.dto.ts
+
+import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsOptional, IsObject, IsEnum } from 'class-validator';
+import { EmploymentStatus } from '@prisma/client';
 
 export class UpdateTeacherDto {
-  @ApiPropertyOptional({
-    type: () => QualificationDto,
-    nullable: true,
+  @ApiProperty({
+    description: 'Teacher qualifications (JSON)',
+    required: false,
   })
+  @IsObject()
   @IsOptional()
-  qualifications?: Prisma.JsonValue | null;
+  qualifications?: Record<string, any>;
 
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
+  @ApiProperty({ description: 'Teacher bio', required: false })
   @IsString()
-  bio?: string | null;
+  @IsOptional()
+  bio?: string;
+
+  @ApiProperty({
+    description: 'Employment status',
+    enum: EmploymentStatus,
+    required: false,
+  })
+  @IsEnum(EmploymentStatus)
+  @IsOptional()
+  employmentStatus?: EmploymentStatus;
 }

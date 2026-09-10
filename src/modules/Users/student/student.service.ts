@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { StudentEntity } from './entities/student.entity';
@@ -10,6 +11,7 @@ import { EnrollmentStatus, UserStatus } from '@prisma/client';
 import { CreateStudentAdminDto } from 'src/modules/Users/student/dto/create-student-admin.dto';
 import { UpdateStudentAdminDto } from './dto/update-admin.dto';
 import { AuthService } from 'src/modules/auth/auth.service';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class StudentService {
@@ -75,15 +77,21 @@ export class StudentService {
       include: { studentProfile: true },
     });
 
-    if (!currentUser || !currentUser.studentProfile) {
-      throw new BadRequestException('You are not a student');
+    if (!currentUser) {
+      throw new BadRequestException('User not found');
     }
 
-    if (currentUser.studentProfile.id !== id) {
-      throw new BadRequestException(
-        'You cannot update another student’s details',
-      );
+    if (currentUser.role === Role.STUDENT) {
+      if (!currentUser.studentProfile) {
+        throw new BadRequestException('Student profile not found');
+      }
+
+      if (currentUser.studentProfile.id !== id) {
+        throw new ForbiddenException('You can only update your own profile');
+      }
     }
+
+    // ADMIN can update any student
 
     const student = await this.prisma.student.update({
       where: { id },
@@ -103,7 +111,6 @@ export class StudentService {
     await this.prisma.student.update({
       where: { id },
       data: {
-        admissionNumber: dto.admissionNumber,
         enrollmentStatus: dto.enrollmentStatus,
         currentClassId: dto.currentClassId,
         academicYearId: dto.academicYearId,
@@ -191,5 +198,62 @@ export class StudentService {
     const nextSequence = lastSequence + 1;
 
     return `SMS-${year}-${String(nextSequence).padStart(4, '0')}`;
+  }
+
+  async getStudentParents(studentId: string) {
+    return this.prisma.parentStudent.findMany({
+      where: {
+        studentId,
+        approved: true,
+      },
+      include: {
+        parent: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                phoneNumber: true,
+                profilePhoto: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // Get student with all their parents
+  async getStudentWithParents(studentId: string) {
+    return this.prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        parents: {
+          where: { approved: true },
+          include: {
+            parent: {
+              include: {
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                    phoneNumber: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
   }
 }

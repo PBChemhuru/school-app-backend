@@ -18,11 +18,12 @@ import { UpdateStudentAdminDto } from './dto/update-admin.dto';
 import { RolesGuard } from 'src/modules/auth/gaurds/roles.guard';
 import {
   AdminRole,
-  StudentRole,
   TeacherRole,
 } from 'src/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from 'src/modules/auth/decorators/current-user.decorator';
 import { JwtPayload } from 'src/modules/auth/types/request-with-user';
+import { Role } from '@prisma/client';
+import { Roles } from 'src/modules/auth/decorators/roles.decorator';
 
 ApiTags('Students');
 @ApiBearerAuth()
@@ -68,8 +69,7 @@ export class StudentController {
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @AdminRole()
-  @StudentRole()
+  @Roles(Role.ADMIN, Role.STUDENT)
   @Patch(':id')
   studentUpdate(
     @CurrentUser() user: JwtPayload,
