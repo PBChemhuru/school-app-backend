@@ -8,13 +8,15 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { SchoolClassEntity } from 'src/modules/academics/schoolclass/entities/schoolclass.entity';
+import { SchoolClassEntity } from './entities/schoolclass.entity';
 import { CreateSchoolclassDto } from './dto/create-schoolclass.dto';
 import { UpdatesSchoolClassDto } from './dto/update-schoolclass.dto';
 import { FilterSchoolClassDto } from './dto/filter-schoolclass.dto';
 import { PromoteStudentsDto } from './dto/promote-student.dto';
 
-export interface ClassStatistics {
+// ==================== Types ====================
+
+export interface SchoolClassStatistics {
   classId: string;
   name: string;
   gradeLevel: string;
@@ -45,8 +47,37 @@ export interface BulkAssignResult {
   errors: string[];
 }
 
+// ==================== Shared Include Shape ====================
+
+const classWithRelations = Prisma.validator<Prisma.SchoolClassDefaultArgs>()({
+  include: {
+    academicYear: true,
+    classTeacher: {
+      include: {
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    },
+    students: { select: { id: true } },
+    curricula: { select: { id: true } },
+    timetableEntries: { select: { id: true } },
+    announcements: { select: { id: true } },
+  },
+});
+
+type ClassWithRelations = Prisma.SchoolClassGetPayload<
+  typeof classWithRelations
+>;
+
+// ==================== Service ====================
+
 @Injectable()
-export class ClassService {
+export class SchoolClassService {
   constructor(private readonly prisma: PrismaService) {}
 
   // ==================== CREATE ====================
@@ -175,7 +206,7 @@ export class ClassService {
     });
 
     if (!schoolClass) throw new NotFoundException('Class not found');
-    return this.toEntity(schoolClass);
+    return new SchoolClassEntity(schoolClass);
   }
 
   async findByAcademicYear(
@@ -223,13 +254,15 @@ export class ClassService {
     return this.findByAcademicYear(activeYear.id);
   }
 
-  async getClassStatistics(id: string): Promise<ClassStatistics> {
+  async getClassStatistics(id: string): Promise<SchoolClassStatistics> {
     const schoolClass = await this.prisma.schoolClass.findUnique({
       where: { id },
       include: {
         academicYear: true,
         classTeacher: {
-          include: { user: { select: { firstName: true, lastName: true } } },
+          include: {
+            user: { select: { firstName: true, lastName: true, email: true } },
+          },
         },
         students: { include: { user: { select: { gender: true } } } },
         curricula: true,
@@ -255,6 +288,13 @@ export class ClassService {
         ? Math.round((totalStudents / maxCapacity) * 10000) / 100
         : 0;
 
+    // Compute status inline — no need to construct an entity
+    const status = schoolClass.archived
+      ? 'ARCHIVED'
+      : maxCapacity && totalStudents >= maxCapacity
+        ? 'FULL'
+        : 'ACTIVE';
+
     return {
       classId: schoolClass.id,
       name: schoolClass.name,
@@ -273,7 +313,7 @@ export class ClassService {
       totalSubjects: schoolClass.curricula.length,
       totalTimetableEntries: schoolClass.timetableEntries.length,
       totalAnnouncements: schoolClass.announcements.length,
-      status: new SchoolClassEntity(schoolClass).getStatus(),
+      status,
     };
   }
 
@@ -549,62 +589,72 @@ export class ClassService {
     const { sourceClassId, targetClassId, studentIds, newAcademicYearId } =
       promoteDto;
 
+    // 1. Validate all three references exist
     const [sourceClass, targetClass, newAcademicYear] = await Promise.all([
       this.prisma.schoolClass.findUnique({ where: { id: sourceClassId } }),
       this.prisma.schoolClass.findUnique({ where: { id: targetClassId } }),
       this.prisma.academicYear.findUnique({ where: { id: newAcademicYearId } }),
     ]);
+
     if (!sourceClass) throw new NotFoundException('Source class not found');
     if (!targetClass) throw new NotFoundException('Target class not found');
     if (!newAcademicYear)
       throw new NotFoundException('New academic year not found');
 
-    let studentsToPromote;
-    if (studentIds && studentIds.length > 0) {
-      studentsToPromote = await this.prisma.student.findMany({
-        where: { id: { in: studentIds }, currentClassId: sourceClassId },
-      });
-      if (studentsToPromote.length !== studentIds.length) {
-        const foundIds = studentsToPromote.map((s) => s.id);
-        const missing = studentIds.filter((id) => !foundIds.includes(id));
-        throw new BadRequestException(
-          `Some students are not in the source class: ${missing.join(', ')}`,
-        );
-      }
-    } else {
-      studentsToPromote = await this.prisma.student.findMany({
-        where: { currentClassId: sourceClassId, enrollmentStatus: 'ACTIVE' },
-      });
+    // 2. Get students to promote (all active in source, or specific IDs)
+    const students = await this.prisma.student.findMany({
+      where: {
+        currentClassId: sourceClassId,
+        enrollmentStatus: 'ACTIVE',
+        ...(studentIds && studentIds.length > 0
+          ? { id: { in: studentIds } }
+          : {}),
+      },
+      select: { id: true },
+    });
+
+    // If specific IDs were requested, verify they all belong to the source class
+    if (
+      studentIds &&
+      studentIds.length > 0 &&
+      students.length !== studentIds.length
+    ) {
+      const foundIds = new Set(students.map((s) => s.id));
+      const missing = studentIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(
+        `Some students are not in the source class: ${missing.join(', ')}`,
+      );
     }
 
-    if (studentsToPromote.length === 0) {
+    if (students.length === 0) {
       return { promoted: 0, skipped: 0, errors: [] };
     }
 
+    // 3. Check target capacity
     if (targetClass.maxCapacity) {
       const currentCount = await this.prisma.student.count({
         where: { currentClassId: targetClassId },
       });
-      if (currentCount + studentsToPromote.length > targetClass.maxCapacity) {
+
+      if (currentCount + students.length > targetClass.maxCapacity) {
         throw new BadRequestException(
-          `Cannot promote ${studentsToPromote.length} students — target class capacity exceeded (current: ${currentCount}, max: ${targetClass.maxCapacity})`,
+          `Cannot promote ${students.length} students — target class capacity exceeded (current: ${currentCount}, max: ${targetClass.maxCapacity})`,
         );
       }
     }
 
-    const promotedIds = studentsToPromote.map((s) => s.id);
+    // 4. Promote in one atomic operation
+    const ids = students.map((s) => s.id);
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.student.updateMany({
-        where: { id: { in: promotedIds } },
-        data: {
-          currentClassId: targetClassId,
-          academicYearId: newAcademicYearId,
-        },
-      });
+    await this.prisma.student.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        currentClassId: targetClassId,
+        academicYearId: newAcademicYearId,
+      },
     });
 
-    return { promoted: promotedIds.length, skipped: 0, errors: [] };
+    return { promoted: ids.length, skipped: 0, errors: [] };
   }
 
   // ==================== SEARCH / FILTER ====================
@@ -629,7 +679,7 @@ export class ClassService {
     return classes.map((c) => this.toEntity(c));
   }
 
-  async filter(filterDto: FilterClassDto): Promise<SchoolClassEntity[]> {
+  async filter(filterDto: FilterSchoolClassDto): Promise<SchoolClassEntity[]> {
     const where: Prisma.SchoolClassWhereInput = {};
 
     if (filterDto.academicYearId)
@@ -657,35 +707,18 @@ export class ClassService {
 
   // ==================== HELPERS ====================
 
-  private toEntity(cls: any): SchoolClassEntity {
+  private toEntity(cls: ClassWithRelations): SchoolClassEntity {
     const entity = new SchoolClassEntity(cls);
     entity._count = {
-      students: cls.students?.length || 0,
-      curricula: cls.curricula?.length || 0,
-      timetableEntries: cls.timetableEntries?.length || 0,
-      announcements: cls.announcements?.length || 0,
+      students: cls.students.length,
+      curricula: cls.curricula.length,
+      timetableEntries: cls.timetableEntries.length,
+      announcements: cls.announcements.length,
     };
     return entity;
   }
 
   private defaultIncludes() {
-    return {
-      academicYear: true,
-      classTeacher: {
-        include: {
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-        },
-      },
-      students: { select: { id: true } },
-      curricula: { select: { id: true } },
-      timetableEntries: { select: { id: true } },
-      announcements: { select: { id: true } },
-    };
+    return classWithRelations.include;
   }
 }

@@ -9,7 +9,6 @@ import { ParentModule } from './modules/Users/parent/parent.module';
 import { TeacherModule } from './modules/Users/teacher/teacher.module';
 import { ConfigModule } from '@nestjs/config';
 import { AdminModule } from './modules/admin/admin.module';
-import { ClassesModule } from './modules/academics/classes/classes.module';
 import { AcademicYearModule } from './modules/academics/academic-year/academic-year.module';
 import { TermModule } from './modules/academics/term/term.module';
 import { SubjectModule } from './modules/academics/subject/subject.module';
@@ -18,7 +17,12 @@ import { TimetableModule } from './modules/academics/timetable/timetable.module'
 import { ResultModule } from './modules/academics/result/result.module';
 import { AttendanceModule } from './modules/academics/attendance/attendance.module';
 import { TransferHistoryModule } from './modules/academics/transfer-history/transfer-history.module';
-import { SchoolclassModule } from './modules/academics/schoolclass/schoolclass.module';
+import { SchoolClassModule } from './modules/academics/schoolclass/schoolclass.module';
+import { ExtracurricularActivitesModule } from './modules/communications/extracurricular-activites/extracurricular-activites.module';
+import { ActivityModule } from './modules/communications/activity/activity.module';
+import { ActivityMemembershipModule } from './modules/communications/activity-memembership/activity-memembership.module';
+import { EventModule } from './modules/communications/event/event.module';
+import { AnnouncementModule } from './modules/communications/announcement/announcement.module';
 
 @Module({
   imports: [
@@ -32,7 +36,6 @@ import { SchoolclassModule } from './modules/academics/schoolclass/schoolclass.m
       isGlobal: true,
     }),
     AdminModule,
-    ClassesModule,
     AcademicYearModule,
     TermModule,
     SubjectModule,
@@ -41,7 +44,12 @@ import { SchoolclassModule } from './modules/academics/schoolclass/schoolclass.m
     ResultModule,
     AttendanceModule,
     TransferHistoryModule,
-    SchoolclassModule,
+    SchoolClassModule,
+    ExtracurricularActivitesModule,
+    ActivityModule,
+    ActivityMemembershipModule,
+    EventModule,
+    AnnouncementModule,
   ],
   controllers: [AppController],
   providers: [AppService],

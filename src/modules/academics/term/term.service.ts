@@ -62,17 +62,17 @@ export class TermService {
     }
 
     // Check for duplicate term number if provided
-    if (createDto.termNumber) {
+    if (createDto) {
       const duplicateNumber = await this.prisma.term.findFirst({
         where: {
           academicYearId: createDto.academicYearId,
-          termNumber: createDto.termNumber,
+          name: createDto.name,
         },
       });
 
       if (duplicateNumber) {
         throw new ConflictException(
-          `Term number ${createDto.termNumber} already exists in this academic year`,
+          `Term "${createDto.name}" already exists in this academic year`,
         );
       }
     }
@@ -84,7 +84,7 @@ export class TermService {
         startDate,
         endDate,
         academicYearId: createDto.academicYearId,
-        ...(createDto.termNumber && { termNumber: createDto.termNumber }),
+        ...(createDto.name && { termNumber: createDto.name }),
       },
       include: {
         academicYear: true,
@@ -258,24 +258,6 @@ export class TermService {
     return new TermEntity(term);
   }
 
-  async getTermByNumber(
-    academicYearId: string,
-    termNumber: number,
-  ): Promise<TermEntity | null> {
-    const term = await this.prisma.term.findFirst({
-      where: {
-        academicYearId,
-        termNumber,
-      },
-      include: {
-        academicYear: true,
-      },
-    });
-
-    if (!term) return null;
-    return new TermEntity(term);
-  }
-
   // ==================== UPDATE ====================
 
   async update(id: string, updateDto: UpdateTermDto): Promise<TermEntity> {
@@ -330,18 +312,18 @@ export class TermService {
     }
 
     // Check for duplicate term number if provided
-    if (updateDto.termNumber) {
+    if (updateDto.name) {
       const duplicateNumber = await this.prisma.term.findFirst({
         where: {
           academicYearId: existing.academicYearId,
-          termNumber: updateDto.termNumber,
+          name: updateDto.name,
           id: { not: id },
         },
       });
 
       if (duplicateNumber) {
         throw new ConflictException(
-          `Term number ${updateDto.termNumber} already exists in this academic year`,
+          `Term "${updateDto.name}" already exists in this academic year`,
         );
       }
     }
@@ -351,7 +333,6 @@ export class TermService {
       name?: string;
       startDate?: Date;
       endDate?: Date;
-      termNumber?: number;
     } = {};
 
     if (updateDto.name !== undefined) {
@@ -364,10 +345,6 @@ export class TermService {
 
     if (updateDto.endDate !== undefined) {
       data.endDate = new Date(updateDto.endDate);
-    }
-
-    if (updateDto.termNumber !== undefined) {
-      data.termNumber = updateDto.termNumber;
     }
 
     // Update term

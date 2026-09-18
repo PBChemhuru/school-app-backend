@@ -1,14 +1,7 @@
 // src/modules/academics/term/dto/create-term.dto.ts
 
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsString,
-  IsDateString,
-  IsUUID,
-  IsOptional,
-  IsInt,
-  Min,
-} from 'class-validator';
+import { IsString, IsDateString, IsUUID } from 'class-validator';
 
 export class CreateTermDto {
   @ApiProperty({
@@ -38,14 +31,4 @@ export class CreateTermDto {
   })
   @IsUUID()
   academicYearId!: string;
-
-  @ApiProperty({
-    description: 'Term number (1, 2, 3, etc.)',
-    example: 1,
-    required: false,
-  })
-  @IsInt()
-  @Min(1)
-  @IsOptional()
-  termNumber?: number;
 }

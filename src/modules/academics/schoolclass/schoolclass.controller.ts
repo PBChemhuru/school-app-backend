@@ -24,26 +24,26 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
-import { ClassService } from './class.service';
-import { CreateClassDto } from './dto/create-class.dto';
-import { UpdateClassDto } from './dto/update-class.dto';
-import { FilterClassDto } from './dto/filter-class.dto';
+import { SchoolClassService } from 'src/modules/academics/schoolclass/schoolclass.service';
+import { CreateSchoolclassDto } from './dto/create-schoolclass.dto';
+import { UpdatesSchoolClassDto } from './dto/update-schoolclass.dto';
+import { FilterSchoolClassDto } from './dto/filter-schoolclass.dto';
+import { PromoteStudentsDto } from './dto/promote-student.dto';
 import { AssignStudentDto } from './dto/assign-student.dto';
-import { PromoteStudentsDto } from './dto/promote-students.dto';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../auth/guards/roles.guard';
+import { JwtAuthGuard } from 'src/modules/auth/gaurds/jwt-auth.guard';
+import { RolesGuard } from 'src/modules/auth/gaurds/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
-import { RequestWithUser } from 'src/interfaces/request.interface';
+import { RequestWithUser } from 'src/modules/auth/types/request-with-user';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @ApiTags('Classes')
 @ApiBearerAuth()
 @Controller('classes')
 @UseGuards(JwtAuthGuard, RolesGuard)
-export class ClassController {
+export class SchoolClassController {
   constructor(
-    private readonly classService: ClassService,
+    private readonly classService: SchoolClassService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -73,7 +73,10 @@ export class ClassController {
   @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Filter classes' })
   @ApiResponse({ status: 200, description: 'Returns filtered classes' })
-  async filter(@Query() dto: FilterClassDto, @Req() req: RequestWithUser) {
+  async filter(
+    @Query() dto: FilterSchoolClassDto,
+    @Req() req: RequestWithUser,
+  ) {
     const classes = await this.classService.filter(dto);
     return req.user.role === Role.ADMIN
       ? classes.map((c) => c.toAdminJSON())
@@ -126,7 +129,7 @@ export class ClassController {
   ) {
     if (req.user.role === Role.TEACHER) {
       const teacher = await this.prisma.teacher.findUnique({
-        where: { userId: req.user.id },
+        where: { userId: req.user.sub },
       });
       if (!teacher || teacher.id !== teacherId) {
         throw new ForbiddenException('You can only view your own classes');
@@ -145,7 +148,7 @@ export class ClassController {
   @ApiResponse({ status: 200, description: 'Returns my classes' })
   async getMyClasses(@Req() req: RequestWithUser) {
     const teacher = await this.prisma.teacher.findUnique({
-      where: { userId: req.user.id },
+      where: { userId: req.user.sub },
     });
     if (!teacher) throw new ForbiddenException('Teacher profile not found');
 
@@ -181,7 +184,7 @@ export class ClassController {
   @ApiOperation({ summary: 'Create a class (Admin only)' })
   @ApiResponse({ status: 201, description: 'Class created' })
   @ApiResponse({ status: 409, description: 'Class already exists' })
-  async create(@Body() dto: CreateClassDto) {
+  async create(@Body() dto: CreateSchoolclassDto) {
     const created = await this.classService.create(dto);
     return created.toAdminJSON();
   }
@@ -191,7 +194,7 @@ export class ClassController {
   @ApiOperation({ summary: 'Update a class (Admin only)' })
   @ApiParam({ name: 'id', description: 'Class ID' })
   @ApiResponse({ status: 200, description: 'Class updated' })
-  async update(@Param('id') id: string, @Body() dto: UpdateClassDto) {
+  async update(@Param('id') id: string, @Body() dto: UpdatesSchoolClassDto) {
     const updated = await this.classService.update(id, dto);
     return updated.toAdminJSON();
   }

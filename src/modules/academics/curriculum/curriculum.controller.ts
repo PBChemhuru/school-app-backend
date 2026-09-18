@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { CurriculumService } from './curriculum.service';
 import { CreateCurriculumDto } from './dto/create-curriculum.dto';
 import { UpdateCurriculumDto } from './dto/update-curriculum.dto';
@@ -19,16 +27,19 @@ export class CurriculumController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.curriculumService.findOne(+id);
+    return this.curriculumService.findOne(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCurriculumDto: UpdateCurriculumDto) {
-    return this.curriculumService.update(+id, updateCurriculumDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateCurriculumDto: UpdateCurriculumDto,
+  ) {
+    return this.curriculumService.update(id, updateCurriculumDto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.curriculumService.remove(+id);
+    return this.curriculumService.remove(id);
   }
 }

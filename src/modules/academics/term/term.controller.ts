@@ -94,28 +94,6 @@ export class TermController {
   findByAcademicYear(@Param('academicYearId') academicYearId: string) {
     return this.termService.findByAcademicYear(academicYearId);
   }
-
-  @Get('academic-year/:academicYearId/term-number/:termNumber')
-  @Roles(Role.ADMIN, Role.TEACHER)
-  @ApiOperation({ summary: 'Get term by academic year and term number' })
-  @ApiParam({ name: 'academicYearId', description: 'Academic Year ID' })
-  @ApiParam({ name: 'termNumber', description: 'Term Number' })
-  @ApiResponse({ status: 200, description: 'Returns term' })
-  @ApiResponse({ status: 404, description: 'Term not found' })
-  async getTermByNumber(
-    @Param('academicYearId') academicYearId: string,
-    @Param('termNumber') termNumber: number,
-  ) {
-    const term = await this.termService.getTermByNumber(
-      academicYearId,
-      termNumber,
-    );
-    if (!term) {
-      throw new NotFoundException('Term not found');
-    }
-    return term;
-  }
-
   @Get(':id')
   @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Get term by ID' })

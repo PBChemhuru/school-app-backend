@@ -20,6 +20,11 @@ type TeacherWithUser = Teacher & {
   };
 };
 
+type StudentWithId = Pick<Student, 'id'>;
+type CurriculumWithId = Pick<Curriculum, 'id'>;
+type TimetableWithId = Pick<Timetable, 'id'>;
+type AnnouncementWithId = Pick<Announcement, 'id'>;
+
 export interface SchoolClassCounts {
   students: number;
   curricula: number;
@@ -41,10 +46,10 @@ export class SchoolClassEntity implements SchoolClass {
 
   academicYear?: AcademicYear;
   classTeacher?: TeacherWithUser | null;
-  students?: Student[];
-  curricula?: Curriculum[];
-  timetableEntries?: Timetable[];
-  announcements?: Announcement[];
+  students?: StudentWithId[];
+  curricula?: CurriculumWithId[];
+  timetableEntries?: TimetableWithId[];
+  announcements?: AnnouncementWithId[];
 
   _count?: SchoolClassCounts;
 
