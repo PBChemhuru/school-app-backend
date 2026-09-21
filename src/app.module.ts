@@ -18,11 +18,10 @@ import { ResultModule } from './modules/academics/result/result.module';
 import { AttendanceModule } from './modules/academics/attendance/attendance.module';
 import { TransferHistoryModule } from './modules/academics/transfer-history/transfer-history.module';
 import { SchoolClassModule } from './modules/academics/schoolclass/schoolclass.module';
-import { ExtracurricularActivitesModule } from './modules/communications/extracurricular-activites/extracurricular-activites.module';
 import { ActivityModule } from './modules/communications/activity/activity.module';
-import { ActivityMemembershipModule } from './modules/communications/activity-memembership/activity-memembership.module';
 import { EventModule } from './modules/communications/event/event.module';
 import { AnnouncementModule } from './modules/communications/announcement/announcement.module';
+import { ActivityMembershipModule } from './modules/communications/activity-membership/activity-membership.module';
 
 @Module({
   imports: [
@@ -45,9 +44,8 @@ import { AnnouncementModule } from './modules/communications/announcement/announ
     AttendanceModule,
     TransferHistoryModule,
     SchoolClassModule,
-    ExtracurricularActivitesModule,
     ActivityModule,
-    ActivityMemembershipModule,
+    ActivityMembershipModule,
     EventModule,
     AnnouncementModule,
   ],

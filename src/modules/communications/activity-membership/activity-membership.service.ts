@@ -7,10 +7,9 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { ActivityMembershipStatus, Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { SignUpActivityDto } from './dto/sign-up-activity.dto';
-import { FilterMembershipDto } from './dto/filter-membership.dto';
+import { FilterMembershipDto } from '../activity-membership/dto/filter-activity-membership.dto';
 import { ActivityMembershipEntity } from './entities/activity-membership.entity';
 
 // ==================== Response Interfaces ====================
@@ -60,13 +59,6 @@ const membershipWithRelations =
           },
         },
       },
-      reviewedBy: {
-        include: {
-          user: {
-            select: { firstName: true, lastName: true, email: true },
-          },
-        },
-      },
     },
   });
 
@@ -79,22 +71,17 @@ type MembershipWithRelations = Prisma.ActivityMembershipGetPayload<
 @Injectable()
 export class ActivityMembershipService {
   constructor(private readonly prisma: PrismaService) {}
-
   // ==================== STUDENT: SIGN UP ====================
   async signUp(
     activityId: string,
     studentUserId: string,
-    dto: SignUpActivityDto,
   ): Promise<SignUpResponse> {
-    // 1. Find student from the auth user
     const student = await this.prisma.student.findUnique({
       where: { userId: studentUserId },
     });
-
     if (!student) {
       throw new NotFoundException('Student profile not found');
     }
-
     if (student.enrollmentStatus !== 'ACTIVE') {
       throw new BadRequestException('Only active students can join activities');
     }
@@ -127,6 +114,9 @@ export class ActivityMembershipService {
       if (existing.status === 'PENDING') {
         throw new ConflictException('Your signup is already pending approval');
       }
+      if (existing.status === 'REJECTED') {
+        throw new ConflictException('Your signup was previous rejected');
+      }
       // WITHDRAWN or REJECTED — shouldn't happen since we delete on withdraw,
       // but just in case, allow them to be reopened via update
     }
@@ -158,13 +148,7 @@ export class ActivityMembershipService {
         'Your signup was submitted. The coordinator will review it shortly.',
     };
   }
-
   // ==================== COORDINATOR: APPROVE ====================
-
-  /**
-   * Coordinator approves a pending signup.
-   * Only the assigned coordinator (or admin) can approve.
-   */
   async approve(
     membershipId: string,
     reviewerUserId: string,
@@ -179,7 +163,7 @@ export class ActivityMembershipService {
       throw new NotFoundException('Membership not found');
     }
 
-    if (membership.status !== 'PENDING') {
+    if (membership.status !== ActivityMembershipStatus.PENDING) {
       throw new BadRequestException('Only pending signups can be approved');
     }
 
@@ -202,7 +186,6 @@ export class ActivityMembershipService {
         'Only the activity coordinator or an admin can approve signups',
       );
     }
-
     // 3. Check capacity again — other students may have filled it
     const approvedCount = await this.prisma.activityMembership.count({
       where: {
@@ -225,8 +208,6 @@ export class ActivityMembershipService {
       where: { id: membershipId },
       data: {
         status: 'APPROVED',
-        reviewedAt: new Date(),
-        reviewedById: reviewer.teacherProfile?.id ?? null,
       },
       include: this.defaultIncludes(),
     });
@@ -238,11 +219,6 @@ export class ActivityMembershipService {
   }
 
   // ==================== STUDENT: WITHDRAW ====================
-
-  /**
-   * Student withdraws from an activity.
-   * The membership row is deleted so the student can rejoin later.
-   */
   async withdraw(
     membershipId: string,
     studentUserId: string,
@@ -264,23 +240,19 @@ export class ActivityMembershipService {
         'You can only withdraw your own memberships',
       );
     }
-
-    // Delete the row
-    await this.prisma.activityMembership.delete({
+    await this.prisma.activityMembership.update({
       where: { id: membershipId },
+      data: {
+        status: ActivityMembershipStatus.WITHDRAWN,
+      },
+      include: this.defaultIncludes(),
     });
 
     return {
       message: 'You have successfully withdrawn from this activity',
     };
   }
-
   // ==================== ADMIN: REMOVE MEMBER ====================
-
-  /**
-   * Admin removes a member from any activity.
-   * Works regardless of status (PENDING, APPROVED).
-   */
   async removeMember(membershipId: string): Promise<WithdrawResponse> {
     const membership = await this.prisma.activityMembership.findUnique({
       where: { id: membershipId },
@@ -292,7 +264,17 @@ export class ActivityMembershipService {
       where: { id: membershipId },
     });
 
-    return { message: 'Member removed successfully' };
+    await this.prisma.activityMembership.update({
+      where: { id: membershipId },
+      data: {
+        status: ActivityMembershipStatus.WITHDRAWN,
+      },
+      include: this.defaultIncludes(),
+    });
+
+    return {
+      message: 'You have successfully withdrawn from this activity',
+    };
   }
 
   // ==================== READ ====================
@@ -306,11 +288,6 @@ export class ActivityMembershipService {
     if (!membership) throw new NotFoundException('Membership not found');
     return new ActivityMembershipEntity(membership);
   }
-
-  /**
-   * List all memberships for an activity.
-   * Optionally filter by status (e.g., only APPROVED, only PENDING).
-   */
   async findByActivity(
     activityId: string,
     status?: 'PENDING' | 'APPROVED',
@@ -332,17 +309,36 @@ export class ActivityMembershipService {
     return memberships.map((m) => new ActivityMembershipEntity(m));
   }
 
-  /**
-   * List pending memberships for an activity.
-   * Shortcut for findByActivity(id, 'PENDING').
-   */
-  async findPending(activityId: string): Promise<ActivityMembershipEntity[]> {
-    return this.findByActivity(activityId, 'PENDING');
+  async findPendingSignupsForCoordinator(
+    coordinatorUserId: string,
+  ): Promise<ActivityMembershipEntity[]> {
+    const teacher = await this.prisma.teacher.findUnique({
+      where: { userId: coordinatorUserId },
+    });
+    if (!teacher) throw new NotFoundException('Teacher profile not found');
+
+    const memberships = await this.prisma.activityMembership.findMany({
+      where: { coordinatorId: teacher.id, status: 'PENDING' },
+      include: this.defaultIncludes(),
+      orderBy: [{ joinedAt: 'asc' }],
+    });
+
+    return memberships.map((m) => new ActivityMembershipEntity(m));
   }
 
-  /**
-   * Get all memberships for the current student.
-   */
+  async findAllPending(): Promise<ActivityMembershipEntity[]> {
+    const where: Prisma.ActivityMembershipWhereInput = {
+      status: 'PENDING',
+    };
+    const memberships = await this.prisma.activityMembership.findMany({
+      where,
+      include: this.defaultIncludes(),
+      orderBy: [{ joinedAt: 'asc' }],
+    });
+
+    return memberships.map((m) => new ActivityMembershipEntity(m));
+  }
+
   async findByStudent(
     studentUserId: string,
   ): Promise<ActivityMembershipEntity[]> {
@@ -361,9 +357,6 @@ export class ActivityMembershipService {
     return memberships.map((m) => new ActivityMembershipEntity(m));
   }
 
-  /**
-   * General filter — used by admin/teacher dashboards.
-   */
   async filter(
     filterDto: FilterMembershipDto,
   ): Promise<ActivityMembershipEntity[]> {
@@ -382,12 +375,6 @@ export class ActivityMembershipService {
     return memberships.map((m) => new ActivityMembershipEntity(m));
   }
 
-  // ==================== STATISTICS ====================
-
-  /**
-   * Get pending and approved counts for an activity.
-   * Useful for coordinator dashboard.
-   */
   async getActivityMembershipStats(activityId: string) {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
@@ -417,7 +404,6 @@ export class ActivityMembershipService {
         : false,
     };
   }
-
   // ==================== HELPERS ====================
 
   private defaultIncludes() {
