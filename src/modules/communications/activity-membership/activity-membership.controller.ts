@@ -13,7 +13,6 @@ import {
   HttpCode,
   Req,
   ForbiddenException,
-  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -116,31 +115,6 @@ export class ActivityMembershipController {
     return memberships.map((m) => m.toCoordinatorJSON());
   }
 
-  // ==================== ADMIN: PENDING STATS ====================
-
-  @Get('pending/stats')
-  @Roles(Role.ADMIN, Role.TEACHER)
-  @ApiOperation({ summary: 'Get pending signup counts grouped by activity' })
-  @ApiQuery({ name: 'coordinatorId', required: false })
-  @ApiResponse({ status: 200, description: 'Returns counts per activity' })
-  async getPendingStats(
-    @Req() req: RequestWithUser,
-    @Query('coordinatorId') coordinatorId?: string,
-  ) {
-    // Teachers are auto-scoped to their own activities
-    if (req.user.role === Role.TEACHER) {
-      const teacher = await this.prisma.teacher.findUnique({
-        where: { userId: req.user.sub },
-      });
-      if (!teacher) throw new ForbiddenException('Teacher profile not found');
-
-      return this.membershipService.getPendingStats(teacher.id);
-    }
-
-    // Admins can query any coordinator or leave empty for all
-    return this.membershipService.getPendingStats(coordinatorId);
-  }
-
   // ==================== COORDINATOR: ACTIVITY MEMBERS ====================
 
   @Get('activities/:activityId/memberships')
@@ -169,16 +143,6 @@ export class ActivityMembershipController {
       : memberships.map((m) => m.toCoordinatorJSON());
   }
 
-  @Get('activities/:activityId/memberships/pending')
-  @Roles(Role.ADMIN, Role.TEACHER)
-  @ApiOperation({ summary: 'List only pending memberships for an activity' })
-  @ApiParam({ name: 'activityId', description: 'Activity ID' })
-  @ApiResponse({ status: 200, description: 'Returns pending memberships' })
-  async getActivityPending(@Param('activityId') activityId: string) {
-    const memberships = await this.membershipService.findPending(activityId);
-    return memberships.map((m) => m.toCoordinatorJSON());
-  }
-
   @Get('activities/:activityId/memberships/stats')
   @Roles(Role.ADMIN, Role.TEACHER)
   @ApiOperation({ summary: 'Get membership stats for an activity' })
@@ -203,7 +167,7 @@ export class ActivityMembershipController {
   ) {
     const result = await this.membershipService.approve(
       membershipId,
-      req.user.id,
+      req.user.sub,
     );
     return {
       ...result.membership.toCoordinatorJSON(),
@@ -228,7 +192,7 @@ export class ActivityMembershipController {
       return;
     }
 
-    await this.membershipService.withdraw(membershipId, req.user.id);
+    await this.membershipService.withdraw(membershipId, req.user.sub);
   }
 
   // ==================== SHARED: FILTER ====================

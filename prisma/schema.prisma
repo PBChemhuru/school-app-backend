@@ -26,6 +26,15 @@ enum UserStatus {
   REJECTED
   SUSPENDED
 }
+enum NotificationType {
+  ANNOUNCEMENT
+  EVENT
+  ACTIVITY
+  RESULT
+  PAYMENT
+  ATTENDANCE
+  SYSTEM
+}
 
 enum EnrollmentStatus {
   ACTIVE
@@ -50,12 +59,16 @@ enum EmploymentStatus {
   TERMINATED
 }
 
+enum AnnouncementScope {
+  SCHOOL    // Targets the whole school
+  CLASS     // Targets one specific class
+}
+
 enum AnnouncementAudience {
-  ALL
-  TEACHERS
-  STUDENTS
-  PARENTS
-  CLASS
+  ALL       // Everyone within the scope
+  TEACHERS  // Only teachers within the scope
+  STUDENTS  // Only students within the scope
+  PARENTS   // Only parents within the scope
 }
 
 enum EventType {
@@ -141,6 +154,7 @@ model User {
   teacherProfile Teacher?
   parentProfile  Parent?
 
+  announcements Announcement[]
   notifications Notification[]
   auditLogs     AuditLog[]
 }
@@ -368,15 +382,20 @@ model Announcement {
   id            String               @id @default(cuid())
   title         String
   body          String
+  scope         AnnouncementScope @default(SCHOOL)
   audience      AnnouncementAudience
   classId       String?
   createdById   String
-  publishAt     DateTime?
+  createdBy     User                 @relation(fields: [createdById], references: [id])
+  publishAt     DateTime?            
   expiresAt     DateTime?
-  attachmentUrl String?
+  attachmentUrl String?        
   createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+ // Relations
   targetClass   SchoolClass?         @relation(fields: [classId], references: [id])
-}
+  }
 
 model Event {
   id          String         @id @default(cuid())
@@ -433,6 +452,18 @@ model ActivityMembership {
 // SETTINGS & CONFIGURATION
 // =========================
 
+model GradingScale {
+  id              String        @id @default(cuid())
+  schoolSettingId String
+  letterGrade     String
+  minPercentage   Float
+  maxPercentage   Float
+
+  schoolSetting SchoolSetting @relation(fields: [schoolSettingId], references: [id])
+
+  @@index([schoolSettingId])
+}
+
 model SchoolSetting {
   id                 String         @id @default(cuid())
   schoolName         String
@@ -447,27 +478,11 @@ model SchoolSetting {
   smsNotifications   Boolean        @default(false)
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
-  gradingScales      GradingScale[]
+
+  gradingScales GradingScale[]
 }
 
-model GradingScale {
-  id              String        @id @default(cuid())
-  schoolSettingId String
-  letterGrade     String
-  minPercentage   Float
-  maxPercentage   Float
-  schoolSetting   SchoolSetting @relation(fields: [schoolSettingId], references: [id])
-}
 
-model Permission {
-  id        String  @id @default(cuid())
-  role      Role
-  module    String
-  canCreate Boolean @default(false)
-  canRead   Boolean @default(true)
-  canUpdate Boolean @default(false)
-  canDelete Boolean @default(false)
-}
 
 model AuditLog {
   id        String   @id @default(cuid())
@@ -476,18 +491,32 @@ model AuditLog {
   module    String
   metadata  Json?
   createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
-}
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([module, createdAt])
+} 
 
 // =========================
 // NOTIFICATIONS
 // =========================
 model Notification {
-  id        String   @id @default(cuid())
+  id        String             @id @default(cuid())
   userId    String
+  type      NotificationType   @default(SYSTEM)
   title     String
   message   String
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
+  read      Boolean            @default(false)
+  createdAt DateTime           @default(now())
+
+  // Source references (nullable)
+  announcementId String?
+  eventId        String?
+  activityId     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
 }

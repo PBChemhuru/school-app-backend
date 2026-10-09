@@ -312,15 +312,22 @@ export class ActivityMembershipService {
   async findPendingSignupsForCoordinator(
     coordinatorUserId: string,
   ): Promise<ActivityMembershipEntity[]> {
+    // 1. Resolve User → Teacher
     const teacher = await this.prisma.teacher.findUnique({
       where: { userId: coordinatorUserId },
     });
     if (!teacher) throw new NotFoundException('Teacher profile not found');
 
+    // 2. Query memberships via the activity relation
     const memberships = await this.prisma.activityMembership.findMany({
-      where: { coordinatorId: teacher.id, status: 'PENDING' },
+      where: {
+        status: 'PENDING',
+        activity: {
+          coordinatorId: teacher.id,
+        },
+      },
       include: this.defaultIncludes(),
-      orderBy: [{ joinedAt: 'asc' }],
+      orderBy: [{ joinedAt: 'asc' }], // oldest first — most urgent at top
     });
 
     return memberships.map((m) => new ActivityMembershipEntity(m));
